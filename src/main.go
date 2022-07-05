@@ -25,9 +25,9 @@ type DeployFile struct {
 }
 
 const (
-	RootPath       string = "/Users/herongqin/.m2/repository/com/ot"
-	RemoteURL      string = ""
-	RerepositoryId string = ""
+	RootPath       string = "/Users/herongqin/.m2/repository/com/zerosky/framework/zerosky-framework-util"
+	RemoteURL      string = "https://nexus.zerosky.cn/repository/maven-releases/"
+	RerepositoryId string = "maven-releases"
 )
 
 // 读取pom 文件，获取坐标
@@ -45,11 +45,17 @@ func getPom(path string) (Pom, error) {
 		log.Fatal(err2)
 		return Pom{}, err2
 	}
+	s := strings.Split(path, "/")
+	// 取上一层目录,作为版本
+	version := s[len(s)-2 : len(s)-1]
+	fmt.Printf("version: %v\n", version)
+
 	v := Pom{}
 	err3 := xml.Unmarshal(b, &v)
 	if err != nil {
 		log.Fatal(err3)
 	}
+	v.Version = version[0]
 	// fmt.Printf("v: %v\n", v)
 	return v, nil
 }
@@ -80,8 +86,9 @@ func findDeployFile() ([]DeployFile, error) {
 }
 
 // 发布到私服
-func deployeCMD(deployConfig DeployFile, repositoryId string) {
+func deployeCMD(deployConfig DeployFile) {
 	cmd := exec.Command("mvn",
+		"deploy:deploy-file",
 		"-Dmaven.test.skip=true",
 		"-Dfile="+deployConfig.FilePath,
 		"-DgroupId="+deployConfig.PomConfig.GroupId,
@@ -113,7 +120,11 @@ func main() {
 
 	df, _ := findDeployFile()
 
-	fmt.Printf("df: %v\n", df)
+	for _, file := range df {
+		fmt.Printf("file: %v\n", file)
+		deployeCMD(file)
+	}
+
 	// cmd := exec.Command("mvn", "-version")
 
 }
