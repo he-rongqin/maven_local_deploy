@@ -17,6 +17,14 @@ type Pom struct {
 	GroupId    string   `xml:"groupId"`
 	ArtifactId string   `xml:"artifactId"`
 	Version    string   `xml:"version"`
+	Packaging  string   `xml:"packaging"`
+	Parent     Parent   `xml:"parent"`
+}
+
+type Parent struct {
+	GroupId    string `xml:"groupId"`
+	ArtifactId string `xml:"artifactId"`
+	Version    string `xml:"version"`
 }
 
 type DeployFile struct {
@@ -25,13 +33,14 @@ type DeployFile struct {
 }
 
 const (
-	RootPath       string = "/Users/herongqin/.m2/repository/com/zerosky/framework/zerosky-framework-util"
-	RemoteURL      string = "https://nexus.zerosky.cn/repository/maven-releases/"
-	RerepositoryId string = "maven-releases"
+	RootPath       string = "/Users/xxxx/developer/ot_jar/leatop/leatop-msdp-parent"
+	RemoteURL      string = "https://nexus.xxx.cn/repository/leatop-snapshot/"
+	RerepositoryId string = "leatop-snapshot"
 )
 
 // 读取pom 文件，获取坐标
 func getPom(path string) (Pom, error) {
+	fmt.Printf("path: %v\n", path)
 	file, err := os.Open(path)
 	if err != nil {
 		log.Fatal(err)
@@ -55,6 +64,12 @@ func getPom(path string) (Pom, error) {
 	if err != nil {
 		log.Fatal(err3)
 	}
+	if v.GroupId == "" {
+		v.GroupId = v.Parent.GroupId
+	}
+	if v.Packaging == "" {
+		v.Packaging = "jar"
+	}
 	v.Version = version[0]
 	// fmt.Printf("v: %v\n", v)
 	return v, nil
@@ -70,11 +85,22 @@ func findDeployFile() ([]DeployFile, error) {
 			log.Fatal(err)
 			return err
 		}
-		if !info.IsDir() && strings.HasSuffix(info.Name(), ".jar") {
-			// fmt.Printf("info.Name(): %v\n", info.Name())
-			p, _ := getPom(strings.Replace(path, "jar", "pom", 1))
-			var depolyeFile = DeployFile{FilePath: path, PomConfig: p}
-			deployeFilesSlice = append(deployeFilesSlice, depolyeFile)
+
+		if !info.IsDir() {
+			s := strings.Split(path, "/")
+			// 取上一层目录,作为版本
+			version := s[len(s)-2 : len(s)-1]
+			if strings.Contains(info.Name(), version[0]) && strings.HasSuffix(info.Name(), ".pom") {
+				p, _ := getPom(path)
+				if strings.Contains(info.Name(), p.Version) {
+					var _path = path
+					if p.Packaging == "jar" {
+						_path = strings.Replace(_path, ".pom", ".jar", 1)
+					}
+					var depolyeFile = DeployFile{FilePath: _path, PomConfig: p}
+					deployeFilesSlice = append(deployeFilesSlice, depolyeFile)
+				}
+			}
 
 		}
 		return nil
@@ -94,9 +120,10 @@ func deployeCMD(deployConfig DeployFile) {
 		"-DgroupId="+deployConfig.PomConfig.GroupId,
 		"-DartifactId="+deployConfig.PomConfig.ArtifactId,
 		"-Dversion="+deployConfig.PomConfig.Version,
-		"-Dpackaging=jar",
+		"-Dpackaging="+deployConfig.PomConfig.Packaging,
 		"-DrepositoryId="+RerepositoryId,
 		"-Durl="+RemoteURL)
+
 	fmt.Printf("cmd.Args: %v\n", cmd.Args)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
